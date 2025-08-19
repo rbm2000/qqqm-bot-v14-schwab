@@ -1,6 +1,7 @@
 import os, asyncio
 import discord
 from discord.ext import commands
+# It's okay to keep the original import, but we will re-import inside functions
 from .data.db import SessionLocal
 from .data.models import Trade, Ledger, Position, SettingKV
 from .config import load_config
@@ -22,54 +23,66 @@ async def ping(ctx): await ctx.reply("pong")
 
 @bot.command()
 async def status(ctx):
+    from .data.db import SessionLocal # Get the initialized session
     s = SessionLocal()
     led = s.query(Ledger).order_by(Ledger.id.desc()).first()
     await ctx.reply(f"Cash {fmt_money(led.cash if led else 0)} | Equity {fmt_money(led.equity if led else 0)}")
+    s.close()
 
 @bot.command()
 async def positions(ctx):
+    from .data.db import SessionLocal # Get the initialized session
     s = SessionLocal()
     poss = s.query(Position).all()
-    if not poss: 
+    if not poss:
         await ctx.reply("No positions")
+        s.close()
         return
     lines = [f"{p.symbol}  qty={p.qty:.4f} avg={fmt_money(p.avg_price)} type={p.type}" for p in poss]
     await ctx.reply("\n".join(lines))
+    s.close()
 
 @bot.command()
 async def pause(ctx):
+    from .data.db import SessionLocal # Get the initialized session
     s = SessionLocal()
     kv = s.query(SettingKV).filter(SettingKV.key=='paused').first()
     if not kv: s.add(SettingKV(key='paused', value='1'))
     else: kv.value = '1'
     s.commit()
     await ctx.reply("⏸️ Trading paused")
+    s.close()
 
 @bot.command()
 async def resume(ctx):
+    from .data.db import SessionLocal # Get the initialized session
     s = SessionLocal()
     kv = s.query(SettingKV).filter(SettingKV.key=='paused').first()
     if not kv: s.add(SettingKV(key='paused', value='0'))
     else: kv.value = '0'
     s.commit()
     await ctx.reply("▶️ Trading resumed")
+    s.close()
 
 @bot.command()
 async def killreset(ctx):
+    from .data.db import SessionLocal # Get the initialized session
     s = SessionLocal()
     kv = s.query(SettingKV).filter(SettingKV.key=='kill_switch').first()
     if not kv: s.add(SettingKV(key='kill_switch', value='0'))
     else: kv.value = '0'
     s.commit()
     await ctx.reply("🔄 Kill‑Switch reset")
+    s.close()
 
 def run_bot():
-    if not TOKEN: 
+    if not TOKEN:
         return
     bot.run(TOKEN)
 
 @bot.command()
 async def report(ctx):
+    from .data.db import SessionLocal # Get the initialized session
     s = SessionLocal()
     led = s.query(Ledger).order_by(Ledger.id.desc()).first()
     trades = s.query(Trade).order_by(Trade.id.desc()).limit(5).all()
@@ -77,6 +90,7 @@ async def report(ctx):
     for t in trades:
         lines.append(f"{t.ts} {t.action} {t.symbol} qty={t.qty} ${t.price:.2f} [{t.tag}]")
     await ctx.reply("\n".join(lines))
+    s.close()
 
 @bot.command()
 async def config(ctx):
