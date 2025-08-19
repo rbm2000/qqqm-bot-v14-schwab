@@ -7,8 +7,6 @@ import json, os, yaml
 from ..factory import make_broker
 
 def create_app():
-    from ..config import Settings
-
     app = Flask(__name__)
     app.secret_key = os.getenv('FLASK_SECRET_KEY','dev-key')
     cfg = load_config()
@@ -236,10 +234,9 @@ def create_app():
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
 
-    return app
+    @app.get('/api/portfolio')
+    def api_portfolio():
+        s = load_config()
+        return jsonify({"symbols": s.symbols, "weekly_dca_total": getattr(s, "weekly_dca_total", 100)})
 
-@app.get('/api/portfolio')
-def api_portfolio():
-    from ..config import Settings
-    s = Settings.load()
-    return jsonify({"symbols": s.symbols, "weekly_dca_total": getattr(s, "weekly_dca_total", 100)})
+    return app
