@@ -1,4 +1,5 @@
 from ..util import discord, human_money
+import time
 
 def run(broker, settings):
     # buy dollars -> shares
