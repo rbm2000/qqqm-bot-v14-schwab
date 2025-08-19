@@ -1,7 +1,8 @@
 import os
-from ..util import http_request
+from ..util import http_request, get_limiter
 from .base import Broker
 from typing import Dict, Any, List
+from ..config import load_config
 
 class AlpacaBroker(Broker):
     def __init__(self):
@@ -9,6 +10,7 @@ class AlpacaBroker(Broker):
         self.key = os.getenv("ALPACA_KEY_ID","")
         self.secret = os.getenv("ALPACA_SECRET_KEY","")
         self.h = {"APCA-API-KEY-ID": self.key, "APCA-API-SECRET-KEY": self.secret}
+        self.settings = load_config()
 
     def _get(self, path):
         r = get_limiter('data', capacity=self.settings.limits.data_capacity_per_min, refill=self.settings.limits.data_capacity_per_min, per_seconds=60).wait(); http_request('GET', self.base+path, headers=self.h)
