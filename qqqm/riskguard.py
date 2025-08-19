@@ -147,3 +147,28 @@ class RiskGuard:
             return GuardResult(False, "Cooldown active")
 
         return GuardResult(True, None)
+
+
+    def portfolio_open_risk(self) -> float:
+        risk = 0.0
+        try:
+            for pos in (self.broker.positions() or []):
+                ml = pos.get('maxLoss')
+                if ml is not None:
+                    risk += float(ml)
+        except Exception:
+            pass
+        return risk
+
+    def cap_open_risk(self) -> float:
+        eq = float(self.broker.equity() or 0)
+        pct = float(self.s.raw.get('risk',{}).get('max_open_risk_pct', 0.06))
+        return eq * pct
+
+    def ok_to_trade(self) -> bool:
+        try:
+            if self.portfolio_open_risk() > self.cap_open_risk():
+                return False
+            return True
+        except Exception:
+            return True

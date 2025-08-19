@@ -100,3 +100,16 @@ def build_scheduler(broker, settings):
     sched.add_job(daily_report, 'cron', day_of_week='mon-fri', hour=17, minute=30, id='daily_report')
     sched.start()
     return sched
+
+
+def schedule_portfolio_jobs(sched, broker, settings):
+    from .portfolio.engine import PortfolioEngine
+    from .riskguard import RiskGuard
+    pe = PortfolioEngine(broker, settings, RiskGuard(broker, settings))
+    def entries_job():
+        try:
+            pe.run_entries(snapshot=None)
+        except Exception as e:
+            from .util import get_logger
+            get_logger(__name__).error(f"portfolio entries error: {e}")
+    sched.add_job(entries_job, 'cron', day_of_week='mon-fri', hour=14, minute=35, id='portfolio_entries')

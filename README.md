@@ -183,3 +183,22 @@ You can tune these in `config.yaml -> limits`.
 ### Panic close
 - **Dashboard:** “Close All Options” button attempts to close every open option position (paper wired; live adapters should wire native multi‑leg close as supported by your broker).
 - **Discord:** `!closeall`
+
+
+## Multi-asset configuration
+Use `symbols:` to define multiple assets with weights and strategy sets:
+```yaml
+weekly_dca_total: 100
+symbols:
+  - ticker: QQQM
+    options_ticker: QQQ
+    weight: 0.45
+    strategies: [dca, wheel, credit_spreads, iron_condor]
+    max_alloc_pct: 0.50
+  - ticker: VTI
+    options_ticker: VTI
+    weight: 0.25
+    strategies: [dca]
+    max_alloc_pct: 0.35
+```
+The engine splits weekly DCA by weight and attempts one new entry per asset per cycle, respecting RiskGuard caps.

@@ -237,3 +237,9 @@ def create_app():
             return jsonify({"ok": False, "error": str(e)}), 500
 
     return app
+
+@app.get('/api/portfolio')
+def api_portfolio():
+    from ..config import Settings
+    s = Settings.load()
+    return jsonify({"symbols": s.symbols, "weekly_dca_total": getattr(s, "weekly_dca_total", 100)})

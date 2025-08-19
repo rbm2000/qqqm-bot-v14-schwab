@@ -93,3 +93,46 @@ async def closeall(ctx):
         await ctx.reply(f"Closed {r.get('closed',0)} option positions.")
     except Exception as e:
         await ctx.reply(f"Error: {e}")
+
+
+@bot.command()
+async def portfolio(ctx):
+    try:
+        from .config import Settings
+        s = Settings.load()
+        lines = ["**Portfolio**:"]
+        for a in s.symbols:
+            lines.append(f"- {a['ticker']} (opts: {a.get('options_ticker',a['ticker'])}) weight={a.get('weight',0):.2f} max_alloc_pct={a.get('max_alloc_pct',1.0):.2f} strategies={','.join(a.get('strategies',[]))}")
+        await ctx.reply("\n".join(lines))
+    except Exception as e:
+        await ctx.reply(f"Error: {e}")
+
+@bot.command()
+async def enable(ctx, ticker: str, strategy: str):
+    try:
+        import json, os
+        path = os.path.join(os.getcwd(), 'data', 'overrides.json')
+        over = {}
+        if os.path.exists(path):
+            over = json.load(open(path,'r'))
+        key = f"{ticker}.enable"
+        lst = set(over.get(key, [])); lst.add(strategy); over[key] = list(lst)
+        json.dump(over, open(path,'w'))
+        await ctx.reply(f"Enabled {strategy} for {ticker}")
+    except Exception as e:
+        await ctx.reply(f"Error: {e}")
+
+@bot.command()
+async def disable(ctx, ticker: str, strategy: str):
+    try:
+        import json, os
+        path = os.path.join(os.getcwd(), 'data', 'overrides.json')
+        over = {}
+        if os.path.exists(path):
+            over = json.load(open(path,'r'))
+        key = f"{ticker}.disable"
+        lst = set(over.get(key, [])); lst.add(strategy); over[key] = list(lst)
+        json.dump(over, open(path,'w'))
+        await ctx.reply(f"Disabled {strategy} for {ticker}")
+    except Exception as e:
+        await ctx.reply(f"Error: {e}")

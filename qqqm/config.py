@@ -64,3 +64,21 @@ def load_config() -> Settings:
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
     return Settings(**data)
+
+
+    @property
+    def symbols(self):
+        sym_list = self.raw.get('symbols')
+        if sym_list:
+            return sym_list
+        return [{
+            "ticker": self.raw.get("symbol","QQQM"),
+            "options_ticker": self.raw.get("options_symbol", self.raw.get("symbol","QQQM")),
+            "weight": 1.0,
+            "strategies": ["dca","wheel","credit_spreads","iron_condor"],
+            "max_alloc_pct": 1.0
+        }]
+
+    @property
+    def weekly_dca_total(self):
+        return self.raw.get("weekly_dca_total", self.raw.get("weekly_dca", 100))
