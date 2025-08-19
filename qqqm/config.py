@@ -59,13 +59,6 @@ class Settings(BaseModel):
     db_url: str = "sqlite:///data/trades.db"
     risk: Risk = Risk()
 
-def load_config() -> Settings:
-    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.yaml")
-    with open(path, "r") as f:
-        data = yaml.safe_load(f) or {}
-    return Settings(**data)
-
-
     @property
     def symbols(self):
         sym_list = self.raw.get('symbols')
@@ -82,3 +75,9 @@ def load_config() -> Settings:
     @property
     def weekly_dca_total(self):
         return self.raw.get("weekly_dca_total", self.raw.get("weekly_dca", 100))
+
+def load_config() -> Settings:
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.yaml")
+    with open(path, "r") as f:
+        data = yaml.safe_load(f) or {}
+    return Settings(**data)
