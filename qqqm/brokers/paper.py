@@ -3,20 +3,26 @@ from .base import Broker
 from typing import Dict, Any, List
 import math, os, json
 from datetime import datetime, timedelta
-from ..data.db import SessionLocal
 from ..data.models import Trade, Ledger, Position, OptionPosition
 from sqlalchemy.orm import Session
 from ..util import journal
 from ..util import legs_mid_credit
 
 class PaperBroker(Broker):
-    def __init__(self, *a, **k):
-        super().__init__(*a, **k)
+    def __init__(self, starting_cash: float = 1000.0):
+        super().__init__()
         try:
             from ..config import load_config
             self.settings = load_config()
         except Exception:
             self.settings = None
+
+        from ..data.db import SessionLocal
+        self.session: Session = SessionLocal()
+
+        if not self.session.query(Ledger).count():
+            self.session.add(Ledger(cash=starting_cash, equity=starting_cash, note="init"))
+            self.session.commit()
 
     def _add_option_position(self, kind, direction, legs, expiry, credit):
         op = OptionPosition(kind=kind, direction=direction, legs=json.dumps(legs), expiry=expiry, entry_credit=credit, status='open')
@@ -24,21 +30,12 @@ class PaperBroker(Broker):
         self.session.commit()
         return op
 
-    def __init__(self, starting_cash: float = 1000.0):
-        self.session: Session = SessionLocal()
-        # initialize ledger if empty
-        if not self.session.query(Ledger).count():
-            self.session.add(Ledger(cash=starting_cash, equity=starting_cash, note="init"))
-            self.session.commit()
-
     def _update_equity(self):
         cash = self._cash()
         eq_val = cash
-        # mark equity positions
         for p in self.session.query(Position).all():
             px = self.price(p.symbol) if p.type == "equity" else 0
             eq_val += p.qty * px
-        # estimate debit to close open option credit positions and subtract
         try:
             from ..data.models import OptionPosition
             opens = self.session.query(OptionPosition).filter(OptionPosition.status=='open').all()
@@ -47,7 +44,6 @@ class PaperBroker(Broker):
                 chain = [o for o in chain if o.get('bid',0)>0 or o.get('ask',0)>0]
                 cur = legs_mid_credit(chain, json.loads(op.legs)) or 0.0
                 if cur > 0:
-                    # positive means credit received if we re-open; to CLOSE, we pay this debit
                     eq_val -= cur
         except Exception:
             pass
@@ -72,7 +68,6 @@ class PaperBroker(Broker):
         if not exps:
             return []
         if not expiry:
-            # pick nearest weekly-ish > 5 days
             now = datetime.utcnow().date()
             candidates = []
             for e in exps:
@@ -95,7 +90,6 @@ class PaperBroker(Broker):
     def _record_trade(self, action, symbol, qty, price, tag, details=""):
         self.session.add(Trade(action=action, symbol=symbol, qty=qty, price=price, order_type="market", tag=tag, details=details))
         journal({"event":"trade","action":action,"symbol":symbol,"qty":qty,"price":price,"tag":tag,"details":details})
-        # update cash/positions
         cash = self._cash()
         if action in ("BUY","OPEN") and qty>0:
             cash -= qty * price
@@ -124,9 +118,7 @@ class PaperBroker(Broker):
         px = self.price(symbol)
         return self._record_trade("SELL", symbol, qty, px, tag, details=note)
 
-    # Simplified option methods for paper mode: we just log and adjust cash collateral
     def sell_covered_call(self, symbol: str, shares: int, strike: float, expiry: str, tag: str) -> Dict[str, Any]:
-        # premium approximation = mid * 1 contract per 100 shares
         chain = self.options_chain(symbol, expiry)
         candidates = [c for c in chain if c["type"]=="call" and abs(c["strike"]-strike)<1e-6]
         mid = 0.0
@@ -155,14 +147,13 @@ class PaperBroker(Broker):
         if contracts < 1:
             return {"status":"skipped","reason":"insufficient cash for CSP"}
         prem = max(0.0, mid) * contracts * 100
-        new_cash = self._cash() + prem - (strike*100*contracts)  # reserve collateral
+        new_cash = self._cash() + prem - (strike*100*contracts)
         self.session.add(Trade(action="OPEN", symbol=f"{symbol}_P_{strike}_{expiry}", qty=contracts*100, price=prem, order_type="market", tag=tag, details="paper CSP"))
         self.session.add(Ledger(cash=new_cash, equity=0, note="open CSP reserve"))
         self.session.commit()
         return {"status":"ok","premium":prem,"contracts":contracts}
 
     def open_vertical_spread(self, symbol: str, kind: str, short_strike: float, long_strike: float, expiry: str, tag: str) -> Dict[str, Any]:
-        # simplified: book small premium
         prem = 10.0
         cash = self._cash() + prem
         self.session.add(Trade(action="OPEN", symbol=f"{symbol}_{kind.upper()}_SPREAD_{expiry}", qty=1, price=prem, order_type="market", tag=tag, details="paper spread"))
@@ -200,9 +191,7 @@ class PaperBroker(Broker):
         last = self.session.query(Ledger).order_by(Ledger.id.desc()).first()
         return {"cash": last.cash, "equity": last.equity}
 
-
     def close_option_positions(self, symbol: str):
-        # Close any option positions with status 'to_close' (flag set elsewhere) — simplified pass-through
         pass
 
     def close_option_by_calculated_debit(self, op_id: int, symbol: str, reason: str = "exit"):
@@ -213,7 +202,6 @@ class PaperBroker(Broker):
         chain = [o for o in chain if o.get('bid',0)>0 or o.get('ask',0)>0]
         
         from ..util import legs_mid_credit
-        # to close a short credit position, we buy it back for its current debit (negative credit)
         credit_now = legs_mid_credit(chain, json.loads(op.legs))
         if credit_now is None:
             return {"status":"skip","reason":"no quotes"}
@@ -226,14 +214,11 @@ class PaperBroker(Broker):
         self.session.commit()
         return {"status":"ok","debit":debit}
 
-
     def close_all_options(self, symbol: str = None, expiry: str = None):
-        # Close every open OptionPosition by estimated debit
         from ..data.models import OptionPosition
         ops = self.session.query(OptionPosition).filter(OptionPosition.status=='open').all()
         n = 0
         for op in ops:
-            # Paper positions don't store symbol; use configured options_symbol
             sym = getattr(self, 'settings', None).options_symbol if getattr(self, 'settings', None) else symbol or 'QQQ'
             r = self.close_option_by_calculated_debit(op.id, sym, reason='CLOSEALL')
             if r.get('status')=='ok': n += 1
