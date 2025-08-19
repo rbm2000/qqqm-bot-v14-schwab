@@ -98,8 +98,7 @@ async def closeall(ctx):
 @bot.command()
 async def portfolio(ctx):
     try:
-        from .config import Settings
-        s = Settings.load()
+        s = load_config()
         lines = ["**Portfolio**:"]
         for a in s.symbols:
             lines.append(f"- {a['ticker']} (opts: {a.get('options_ticker',a['ticker'])}) weight={a.get('weight',0):.2f} max_alloc_pct={a.get('max_alloc_pct',1.0):.2f} strategies={','.join(a.get('strategies',[]))}")
