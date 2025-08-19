@@ -8,7 +8,7 @@ from .data.models import OptionPosition
 from .util import legs_mid_credit
 from .sync import LiveSync
 from .util import discord
-from .util import discord
+import json
 
 def build_scheduler(broker, settings):
     live = LiveSync(broker, settings)
