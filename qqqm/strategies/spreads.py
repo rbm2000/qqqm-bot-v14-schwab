@@ -4,6 +4,7 @@ from ..data.models import RiskItem
 from ..riskguard import RiskGuard
 from ..margin_guard import MarginGuard
 import yfinance as yf
+from datetime import datetime
 
 def run(broker, settings):
     # Risk open % cap enforced by Guard; here we persist risk item when we open
