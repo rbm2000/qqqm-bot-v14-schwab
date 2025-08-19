@@ -1,71 +1,117 @@
+# =========================
+# QQQM Bot — merged config
+# Keep this as your main baseline. Secrets go in config.user.yaml.
+# =========================
+
 # Global configuration
-symbol: QQQM
-mode: paper               # paper | live
-broker: paper             # paper | alpaca | tradier | schwab
+mode: paper            # paper | live
+broker: paper          # paper | alpaca | tradier | schwab
+profile: balanced      # conservative | balanced | enhanced
 
-# High-level bot mode
-profile: balanced         # conservative | balanced | enhanced
+# --- Cash / Risk budget ---
+weekly_dca: 100            # (legacy) dollars to DCA each week
+weekly_dca_total: 100      # (new) total weekly DCA split across symbols[]
+cash_buffer_pct: 0.15      # keep 15% cash buffer
+reduce_sizing_if_dd: 0.15  # reduce sizing if equity DD > 15%
+skip_new_if_vix_above: 28  # skip new options if VIX above this
 
-# Cash / risk
-weekly_dca: 100           # dollars to DCA each week
-cash_buffer_pct: 0.12     # keep 12% cash buffer
-max_drawdown: 0.15        # reduce sizing if equity DD > 15%
-vix_max: 28               # skip new options if VIX above this
+# --- Wheel / CSP / CC prefs ---
+csp_otm_pct: 0.05          # sell CSP ~5% OTM
+cc_otm_pct: 0.08           # sell CC ~8% OTM once 100 shrs
+target_dte_days: 7         # target days to expiry for weekly ops
 
-# Wheel params
-put_pct_otm: 0.05         # sell CSP ~5% OTM
-call_pct_otm: 0.05        # sell CC ~5% OTM
-dte_preference: 7         # target days to expiry
-
-# Spreads / condors (enhanced only)
-spreads_max_allocation_pct: 0.05
-condors_max_concurrent: 2
+# --- Spreads / condors (enhanced only) ---
+spreads_max_allocation_pct: 0.05  # sum of spread max losses ≤ 5% equity
+max_condors_concurrent: 2
 condor_allocation_pct: 0.02
 
-# Reporting
+# --- Reporting ---
 daily_reports: true
-report_time_hhmm: "17:30"
-# v6 RiskGuard
+report_time_hhm: "17:30"
+
+# --- RiskGuard (global) ---
 risk:
   day_abs_loss_stop: 50        # stop new trades if day loss exceeds $50
-  week_loss_pct_stop: 0.10     # or weekly loss exceeds 10%%
-  max_open_risk_pct: 0.06      # sum of spread max losses <= 6%% of equity
+  week_loss_pct_stop: 0.10     # or weekly loss exceeds 10%
+  max_open_risk_pct: 0.06      # sum of spread max losses <= 6% of equity
   vix_ceiling: 28              # blocks new entries if fear index too high
   trade_cooldown_min: 20       # wait 20 minutes after a trade
   max_trades_per_day: 3        # cap daily trade count
   direction_cap_ratio: 2.0     # max 2:1 bias bull vs bear spreads
 
+# --- Capital deployment ---
+deploy_full_cash_on_start: true   # invest all excess cash on first run (respects cash buffer)
 
-# v7 capital deployment
-deploy_full_cash_on_start: true   # invest all excess cash into QQQM at first run (respects cash buffer)
+# --- Legacy symbol fields (kept for backward compatibility) ---
+symbol: QQQM                 # equity DCA target (legacy)
+options_symbol: QQQ          # options liquidity (legacy)
 
-# v7 options symbol (for better liquidity, keep DCA on QQQM but trade options on QQQ)
-options_symbol: QQQ
+# --- Exits for defined-risk (legacy) ---
+spread_take_profit_pct: 0.50       # close when 50% of credit captured
+spread_stop_loss_pct: 0.80         # close when ~80% of credit lost (defined risk)
+condor_take_profit_pct: 0.40
+condor_stop_loss_pct: 0.80
 
-# v7 exits for defined-risk
-exits:
-  spread_take_profit_pct: 0.50   # close when 50% of credit captured
-  spread_stop_loss_pct: 0.50     # close when -50% of credit
-  condor_take_profit_pct: 0.40
-  condor_stop_loss_pct: 0.60
+# --- Volatility gating (legacy) ---
+vix_smoothing: 3
+vix_floor: 15
+vix_ceiling: 28
+vix_factor: 0.6
 
-# v7 volatility sizing
-vol_sizing:
-  vix_floor: 15
-  vix_target: 20
-  vix_ceiling: 28
-  min_factor: 0.40
-  max_factor: 1.00
+# --- Performance / telemetry ---
+enable_weekly_report: true
 
-# v7 performance
-performance:
-  enable_weekly_report: true
+# --- Margin policy ---
+margin_policy: cash_only   # cash_only | forbid (no margin usage allowed)
 
+# --- NEW: multi-asset portfolio (engine prefers this) ---
+symbols:
+  - ticker: QQQM
+    options_ticker: QQQ
+    role: core-tech
+    weight: 0.45
+    strategies: [dca, wheel, credit_spreads, iron_condor]
+    min_spread_risk: 15
+    max_alloc_pct: 0.50
 
-# v10 margin behavior
-margin_policy: cash_only   # cash_only | forbid
+  - ticker: VTI
+    options_ticker: VTI
+    role: broad-market
+    weight: 0.25
+    strategies: [dca]
+    max_alloc_pct: 0.35
 
-# v10 DTE preference for defined-risk entries
-dte_window:
-  min: 21
-  max: 35
+  - ticker: SCHD
+    options_ticker: SCHD
+    role: dividend-tilt
+    weight: 0.15
+    strategies: [dca, covered_calls]
+    cc_otm_pct: 0.08
+    max_alloc_pct: 0.20
+
+  - ticker: MSFT
+    options_ticker: MSFT
+    role: quality-growth
+    weight: 0.15
+    strategies: [defined_risk_spreads]
+    min_spread_risk: 10
+    max_alloc_pct: 0.20
+
+# --- DCA confirmation (Discord) ---
+dca:
+  confirm_on_discord: true
+  confirm_timeout_hours: 48
+
+# --- Schwab OAuth (placeholders; real secrets go in config.user.yaml) ---
+schwab_oauth:
+  auth_url: https://api.schwabapi.com/v1/oauth/authorize
+  token_url: https://api.schwabapi.com/v1/oauth/token
+  client_id: ""            # leave empty here; set in config.user.yaml
+  client_secret: ""        # leave empty here; set in config.user.yaml
+  redirect_uri: "https://qqqm.projectrmac.com/callback"
+
+# --- Rate limits (safe defaults) ---
+limits:
+  orders_per_min: 60
+  quotes_per_min: 120
+

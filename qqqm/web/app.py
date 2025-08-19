@@ -4,7 +4,7 @@ from ..config import load_config
 from ..data.db import init_db, SessionLocal
 from ..data.models import Trade, Ledger, Position, SettingKV, OptionPosition
 import json, os, yaml
-from ..bot import make_broker
+from ..factory import make_broker
 
 def create_app():
     from ..config import Settings

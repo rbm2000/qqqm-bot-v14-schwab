@@ -1,0 +1,71 @@
+# Global configuration
+symbol: QQQM
+mode: paper               # paper | live
+broker: paper             # paper | alpaca | tradier | schwab
+
+# High-level bot mode
+profile: balanced         # conservative | balanced | enhanced
+
+# Cash / risk
+weekly_dca: 100           # dollars to DCA each week
+cash_buffer_pct: 0.12     # keep 12% cash buffer
+max_drawdown: 0.15        # reduce sizing if equity DD > 15%
+vix_max: 28               # skip new options if VIX above this
+
+# Wheel params
+put_pct_otm: 0.05         # sell CSP ~5% OTM
+call_pct_otm: 0.05        # sell CC ~5% OTM
+dte_preference: 7         # target days to expiry
+
+# Spreads / condors (enhanced only)
+spreads_max_allocation_pct: 0.05
+condors_max_concurrent: 2
+condor_allocation_pct: 0.02
+
+# Reporting
+daily_reports: true
+report_time_hhmm: "17:30"
+# v6 RiskGuard
+risk:
+  day_abs_loss_stop: 50        # stop new trades if day loss exceeds $50
+  week_loss_pct_stop: 0.10     # or weekly loss exceeds 10%%
+  max_open_risk_pct: 0.06      # sum of spread max losses <= 6%% of equity
+  vix_ceiling: 28              # blocks new entries if fear index too high
+  trade_cooldown_min: 20       # wait 20 minutes after a trade
+  max_trades_per_day: 3        # cap daily trade count
+  direction_cap_ratio: 2.0     # max 2:1 bias bull vs bear spreads
+
+
+# v7 capital deployment
+deploy_full_cash_on_start: true   # invest all excess cash into QQQM at first run (respects cash buffer)
+
+# v7 options symbol (for better liquidity, keep DCA on QQQM but trade options on QQQ)
+options_symbol: QQQ
+
+# v7 exits for defined-risk
+exits:
+  spread_take_profit_pct: 0.50   # close when 50% of credit captured
+  spread_stop_loss_pct: 0.50     # close when -50% of credit
+  condor_take_profit_pct: 0.40
+  condor_stop_loss_pct: 0.60
+
+# v7 volatility sizing
+vol_sizing:
+  vix_floor: 15
+  vix_target: 20
+  vix_ceiling: 28
+  min_factor: 0.40
+  max_factor: 1.00
+
+# v7 performance
+performance:
+  enable_weekly_report: true
+
+
+# v10 margin behavior
+margin_policy: cash_only   # cash_only | forbid
+
+# v10 DTE preference for defined-risk entries
+dte_window:
+  min: 21
+  max: 35
