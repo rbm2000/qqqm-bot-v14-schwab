@@ -1,0 +1,260 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>QQQM Bot Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/styles.css">
+
+  <!-- Load Chart.js (no inline code inside a src script tag) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>QQQM Options Bot <span class="badge">v6</span></h1>
+
+    <div id="guard" class="guard">
+      <div><b>Status:</b> <span id="guard-status">OK</span> • <b>Broker:</b> <span id="healthStatus">checking…</span></div>
+      <div class="controls">
+        <a class="btn" href="/oauth/start">Connect Schwab</a>
+        <button class="btn" onclick="restartOAuth()">Restart OAuth</button>
+        <button class="danger" onclick="closeAll()">Close All Options</button>
+        <button onclick="forceReb()">Force Rebalance</button>
+        <button onclick="act('/pause')">Pause</button>
+        <button onclick="act('/resume')">Resume</button>
+        <button onclick="act('/reset-kill')">Reset Kill-Switch</button>
+      </div>
+    </div>
+
+    <section class="cards">
+      <div class="card">
+        <h3>Ledger (latest)</h3>
+        {% if ledger %}
+          <p><b>Cash:</b> ${{ '%.2f'|format(ledger.cash or 0) }}</p>
+          <p><b>Equity:</b> ${{ '%.2f'|format(ledger.equity or 0) }}</p>
+        {% else %}
+          <p>No ledger data yet.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <h3>Positions</h3>
+        {% if positions %}
+          <table>
+            <tr><th>Symbol</th><th>Qty</th><th>Avg</th><th>Type</th></tr>
+            {% for p in positions %}
+              <tr>
+                <td>{{ p.symbol }}</td>
+                <td>{{ '%.4f'|format(p.qty or 0) }}</td>
+                <td>${{ '%.2f'|format(p.avg_price or 0) }}</td>
+                <td>{{ p.type }}</td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% else %}
+          <p>No positions yet.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Equity & Cash (30d)</h3>
+      <canvas id="eqChart" height="120"></canvas>
+    </section>
+
+    <section class="card">
+      <h3>Weekly Stats</h3>
+      <p><b>Closed trades:</b> {{ stats.closed_trades }}</p>
+      <p><b>Wins:</b> {{ stats.wins }}</p>
+      <p><b>Net P/L:</b> ${{ '%.2f'|format(stats.pnl or 0) }}</p>
+    </section>
+
+    <section class="card">
+      <h3>Trade Log</h3>
+      {% if trades %}
+        <table>
+          <tr><th>Time</th><th>Action</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Tag</th></tr>
+          {% for t in trades %}
+            <tr>
+              <td>{{ t.ts }}</td>
+              <td>{{ t.action }}</td>
+              <td>{{ t.symbol }}</td>
+              <td>{{ '%.2f'|format(t.qty or 0) }}</td>
+              <td>${{ '%.2f'|format(t.price or 0) }}</td>
+              <td>{{ t.tag }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <p>Nothing yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h3>Open Option Positions</h3>
+      <table id="opts">
+        <tr><th>ID</th><th>Kind</th><th>Dir</th><th>Credit</th><th>Expiry</th><th>Status</th><th>Action</th></tr>
+      </table>
+    </section>
+
+    <section class="card">
+      <h3>Config Editor</h3>
+      <textarea id="cfg" style="width:100%; height:280px; font-family:monospace;"></textarea>
+      <div class="row">
+        <button onclick="loadConfig()">Load</button>
+        <button onclick="saveConfig()">Save</button>
+      </div>
+      <p id="msg"></p>
+    </section>
+  </div>
+
+  <script>
+  // ---- Controls & status ----
+  async function act(endpoint){
+    try {
+      const r = await fetch(endpoint, { method: 'POST' });
+      const j = await r.json();
+      document.getElementById('guard-status').textContent = j.ok ? 'Updated' : 'Error';
+    } catch (e) {
+      document.getElementById('guard-status').textContent = 'Error';
+    } finally {
+      setTimeout(()=>document.getElementById('guard-status').textContent='OK', 1500);
+    }
+  }
+
+  async function checkHealth(){
+    try{
+      const r = await fetch('/api/health');
+      const j = await r.json();
+      document.getElementById('healthStatus').textContent = j.ok ? 'OK' : ('Issues: ' + (j.issues||[]).join(', '));
+    } catch(e){
+      document.getElementById('healthStatus').textContent = 'error';
+    }
+  }
+
+  async function restartOAuth(){
+    try{
+      const r = await fetch('/oauth/restart', { method:'POST' });
+      const j = await r.json();
+      alert(j.ok ? 'OAuth tokens cleared. Reconnect to continue.' : ('Error: ' + (j.error || 'unknown')));
+    } catch(e){
+      alert('Error restarting OAuth');
+    }
+  }
+
+  async function forceReb(){
+    try {
+      const r = await fetch('/force-rebalance', { method:'POST' });
+      await r.json();
+      document.getElementById('guard-status').textContent = 'Rebalanced';
+    } catch(e){
+      document.getElementById('guard-status').textContent = 'Error';
+    } finally {
+      setTimeout(()=>document.getElementById('guard-status').textContent='OK',1500);
+    }
+  }
+
+  async function closeAll(){
+    if(!confirm('Are you sure? This will attempt to close ALL open option positions.')) return;
+    try{
+      const r = await fetch('/api/close_all', { method:'POST' });
+      const j = await r.json();
+      alert('Closed ' + (j.closed || 0) + ' positions');
+      loadOptions();
+    } catch(e){
+      alert('Close-all failed');
+    }
+  }
+
+  // ---- Options table ----
+  async function loadOptions(){
+    try{
+      const r = await fetch('/api/options');
+      const arr = await r.json();
+      const el = document.getElementById('opts');
+      el.innerHTML = '<tr><th>ID</th><th>Kind</th><th>Dir</th><th>Credit</th><th>Expiry</th><th>Status</th><th>Action</th></tr>';
+      for(const o of arr){
+        const tr = document.createElement('tr');
+        const isOpen = (o.status || '').toLowerCase() === 'open';
+        tr.innerHTML = `
+          <td>${o.id}</td>
+          <td>${o.kind}</td>
+          <td>${o.direction}</td>
+          <td>$${Number(o.entry_credit || 0).toFixed(2)}</td>
+          <td>${o.expiry}</td>
+          <td>${o.status}</td>
+          <td>${isOpen ? `<button onclick="closeOp(${o.id})">Close</button>` : ''}</td>`;
+        el.appendChild(tr);
+      }
+    } catch(e){
+      console.error(e);
+    }
+  }
+
+  async function closeOp(id){
+    if(!confirm('Close position ' + id + ' now?')) return;
+    try{
+      const r = await fetch('/api/close?id=' + encodeURIComponent(id), { method:'POST' });
+      const j = await r.json();
+      alert('Close sent: ' + JSON.stringify(j));
+      loadOptions();
+    } catch(e){
+      alert('Close failed');
+    }
+  }
+
+  // ---- Config editor ----
+  async function loadConfig(){
+    try{
+      const r = await fetch('/config');
+      document.getElementById('cfg').value = await r.text();
+    } catch(e){
+      document.getElementById('msg').textContent = 'Failed to load config.';
+    }
+  }
+
+  async function saveConfig(){
+    try{
+      const body = document.getElementById('cfg').value;
+      const r = await fetch('/config', { method:'POST', body });
+      if (!r.ok) throw new Error('save failed');
+      document.getElementById('msg').textContent = 'Saved.';
+      setTimeout(()=>document.getElementById('msg').textContent = '', 1500);
+    } catch(e){
+      document.getElementById('msg').textContent = 'Save failed.';
+    }
+  }
+
+  // ---- Chart ----
+  async function loadChart(){
+    try{
+      const r = await fetch('/api/ledger');
+      const data = await r.json();
+      const last = data.slice(-300); // crude cap
+      const labels = last.map(x => (x.ts || '').slice(5,16));
+      const equity = last.map(x => x.equity);
+      const cash = last.map(x => x.cash);
+      const ctx = document.getElementById('eqChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: [
+          { label: 'Equity', data: equity },
+          { label: 'Cash', data: cash }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    } catch(e){
+      console.error('Chart load failed', e);
+    }
+  }
+
+  // ---- Boot ----
+  (function init(){
+    checkHealth();
+    loadOptions();
+    loadConfig();
+    loadChart();
+  })();
+  </script>
+</body>
+</html>
