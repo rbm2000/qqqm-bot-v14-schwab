@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Secrets & Local Data
+.env
+.env.*
+config/config.user.yaml
+data/
+!data/.gitkeep
+
+# IDE / Editor specific
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
