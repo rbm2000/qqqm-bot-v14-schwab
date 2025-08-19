@@ -1,13 +1,15 @@
 import os
-from ..util import http_request
+from ..util import http_request, get_limiter
 from .base import Broker
 from typing import Dict, Any, List
+from ..config import load_config
 
 class TradierBroker(Broker):
     def __init__(self):
         self.base = os.getenv("TRADIER_BASE_URL","https://api.tradier.com/v1")
         self.tok = os.getenv("TRADIER_ACCESS_TOKEN","")
         self.h = {"Authorization": f"Bearer {self.tok}", "Accept": "application/json"}
+        self.settings = load_config()
 
     def _get(self, path, params=None):
         r = get_limiter('data', capacity=self.settings.limits.data_capacity_per_min, refill=self.settings.limits.data_capacity_per_min, per_seconds=60).wait(); http_request('GET', self.base+path, headers=self.h, params=params)
