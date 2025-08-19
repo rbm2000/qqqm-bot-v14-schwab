@@ -38,8 +38,9 @@ def create_app():
     @require_auth
     def index():
         from datetime import datetime, timedelta
+        from ..data.db import SessionLocal # <-- ADD THIS IMPORT
         now = datetime.utcnow(); week_ago = now - timedelta(days=7)
-        sdb = SessionLocal()
+        sdb = SessionLocal() # This will now work correctly
         closed = sdb.query(OptionPosition).filter(OptionPosition.status=='closed', OptionPosition.closed!=None, OptionPosition.closed>=week_ago).all()
         wins = 0; pnl = 0.0
         for op in closed:
